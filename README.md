@@ -79,7 +79,7 @@ The plugin provides the following commands:
 - `:UserSecrets` - Open or create user secrets file
 - `:DotnetTest` - Run test method at cursor
 - `:DotnetTestClass` - Run all tests in current class
-- `:OpenInRider` - Alias for `:DotnetOpenInRider`
+- `:OpenInRider` - Open the current project/file in Rider
 
 ## Usage Examples
 
