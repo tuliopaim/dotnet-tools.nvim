@@ -65,6 +65,7 @@ stylua lua/
 - treesitter: Checked in `helpers.lua:131` and `helpers.lua:171` when test detection is needed
 - plenary.nvim: Checked in `helpers.lua:4` when project root detection is needed
 - tmux: Checked via environment variable, falls back to Neovim splits if not available
+- jq: Used to sanitize `launchSettings.json`. If `jq` is not available, the plugin will fall back to the default JSON parser. It is recommended to have `jq` installed to avoid issues with hidden characters in `launchSettings.json`.
 
 This design allows users to install only the dependencies they need for the features they use. The plugin loads successfully at startup regardless of which dependencies are present.
 

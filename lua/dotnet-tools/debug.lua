@@ -35,6 +35,15 @@ local function read_launch_settings(project_path)
 	local content = file:read("*all")
 	file:close()
 
+	if vim.fn.executable("jq") == 1 then
+		local sanitized_content = vim.fn.system("jq .", content)
+		if vim.v.shell_error == 0 then
+			content = sanitized_content
+		else
+			vim.notify("[dotnet-tools] Failed to sanitize launchSettings.json with jq.", vim.log.levels.WARN)
+		end
+	end
+
 	local ok, launch_settings = pcall(vim.json.decode, content)
 	if not ok then
 		vim.notify("[dotnet-tools] Failed to parse launchSettings.json", vim.log.levels.WARN)
