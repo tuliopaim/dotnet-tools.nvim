@@ -201,6 +201,12 @@ local function configure_debug_session(callback)
 
 		-- Build final configuration
 		local env_vars = selected_profile.environmentVariables or {}
+
+		-- Add applicationUrl as ASPNETCORE_URLS if present
+		if selected_profile.applicationUrl then
+			env_vars.ASPNETCORE_URLS = selected_profile.applicationUrl
+		end
+
 		local args_str = selected_profile.commandLineArgs or ""
 		local args = args_str ~= "" and vim.split(args_str, " ") or {}
 
