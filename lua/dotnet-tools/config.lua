@@ -15,6 +15,15 @@ M.defaults = {
 
 	-- Test runner preference: "tmux" or "split"
 	test_runner_preference = nil, -- nil = auto-detect
+
+	-- NuGet package management settings
+	nuget = {
+		-- Maximum number of search results to return
+		search_limit = 20,
+
+		-- Include prerelease versions when fetching package versions
+		include_prerelease = false,
+	},
 }
 
 M.options = {}

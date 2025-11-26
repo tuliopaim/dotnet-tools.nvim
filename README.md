@@ -22,6 +22,12 @@ A Neovim plugin that provides essential .NET development tools, including debugg
   - Opens at the exact line number
   - Asynchronous execution
 
+- **NuGet Package Management**: Search, install, update, and remove NuGet packages
+  - Interactive package search with partial name matching
+  - Version selection for all packages
+  - List currently installed packages
+  - Update and remove packages with confirmation
+
 ## Requirements
 
 ### Required
@@ -68,6 +74,15 @@ require("dotnet-tools").setup({
 
   -- Test runner preference: "tmux", "split", or nil (auto-detect)
   test_runner_preference = nil,
+
+  -- NuGet package management settings
+  nuget = {
+    -- Maximum number of search results to return
+    search_limit = 20,
+
+    -- Include prerelease versions when fetching package versions
+    include_prerelease = false,
+  },
 })
 ```
 
@@ -75,10 +90,18 @@ require("dotnet-tools").setup({
 
 The plugin provides the following commands:
 
+### Debugging and Testing
 - `:DotnetDebug` - Start debugging with launch profile selection
-- `:UserSecrets` - Open or create user secrets file
 - `:DotnetTest` - Run test method at cursor
 - `:DotnetTestClass` - Run all tests in current class
+
+### NuGet Package Management
+- `:DotnetNugetAdd` - Search and install a NuGet package
+- `:DotnetNugetList` - List installed packages and update selected package to a different version
+- `:DotnetNugetRemove` - Remove a NuGet package from the project
+
+### Other Tools
+- `:UserSecrets` - Open or create user secrets file
 - `:OpenInRider` - Open the current project/file in Rider
 
 ## Usage Examples
@@ -112,12 +135,30 @@ The plugin uses tree-sitter to detect the method and class names automatically.
 
 ### Managing User Secrets
 
-Run `:DotnetSecrets` from any file in your .NET project. The plugin will:
+Run `:UserSecrets` from any file in your .NET project. The plugin will:
 
 - Find the .csproj file
 - Initialize UserSecretsId if not present
 - Create secrets.json if it doesn't exist
 - Open the secrets file for editing
+
+### Managing NuGet Packages
+
+**Adding a package:**
+1. Run `:DotnetNugetAdd`
+2. Type a partial package name (e.g., "Newtonsoft")
+3. Select the desired package from search results
+4. Choose a version to install
+
+**Listing and updating packages:**
+1. Run `:DotnetNugetList` to see all installed packages
+2. Select the package to update
+3. Choose the new version from available versions
+
+**Removing a package:**
+1. Run `:DotnetNugetRemove`
+2. Select the package to remove
+3. Confirm removal
 
 ## Troubleshooting
 
@@ -171,6 +212,11 @@ dotnet_tools.open_or_create_secrets_file()
 
 -- Open in Rider
 dotnet_tools.open_in_rider()
+
+-- NuGet package management
+dotnet_tools.nuget_search_and_install()
+dotnet_tools.nuget_list_packages()
+dotnet_tools.nuget_remove_package()
 ```
 
 ## Examples
@@ -379,6 +425,21 @@ return {
 				"<leader>dr",
 				":OpenInRider<CR>",
 				desc = "Open in Rider",
+			},
+			{
+				"<leader>na",
+				":DotnetNugetAdd<CR>",
+				desc = "Add NuGet package",
+			},
+			{
+				"<leader>nl",
+				":DotnetNugetList<CR>",
+				desc = "List/Update NuGet packages",
+			},
+			{
+				"<leader>nr",
+				":DotnetNugetRemove<CR>",
+				desc = "Remove NuGet package",
 			},
 		},
 		config = function()
