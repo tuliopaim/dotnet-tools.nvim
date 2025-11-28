@@ -82,7 +82,7 @@ end
 -- Check if DLL exists and optionally prompt to build
 local function check_and_build_dll(project_path)
 	local config = require("dotnet-tools.config")
-	local dll = helpers.build_dll_path()
+	local dll = helpers.build_dll_path(project_path)
 
 	if dll and dll ~= "" and vim.fn.filereadable(dll) == 1 then
 		return dll
@@ -125,13 +125,32 @@ local function check_and_build_dll(project_path)
 	vim.notify("[dotnet-tools] Build succeeded!", vim.log.levels.INFO)
 
 	-- Try to get DLL path again after build
-	dll = helpers.build_dll_path()
+	dll = helpers.build_dll_path(project_path)
 	if not dll or dll == "" then
 		vim.notify("[dotnet-tools] Failed to find DLL even after build", vim.log.levels.ERROR)
 		return nil
 	end
 
 	return dll
+end
+
+-- Prompt user to select a startup project (async with callback)
+local function select_project(projects, callback)
+	-- Format project names with relative paths for display
+	local display_names = {}
+	for _, project in ipairs(projects) do
+		table.insert(display_names, project.name .. " (" .. project.relative_path .. ")")
+	end
+
+	vim.ui.select(display_names, {
+		prompt = "Select startup project:",
+	}, function(choice, idx)
+		if choice and idx then
+			callback(projects[idx])
+		else
+			callback(nil)
+		end
+	end)
 end
 
 -- Prompt user to select a launch profile (async with callback)
@@ -148,77 +167,119 @@ local function select_launch_profile(profile_data, callback)
 end
 
 local function configure_debug_session(callback)
-	-- Find project root
-	local project_path = find_project_root()
+	-- Find solution root (searches for .sln, .git, or uses cwd)
+	local current_file = vim.fn.expand("%:p")
+	local start_dir = current_file ~= "" and vim.fn.fnamemodify(current_file, ":h") or vim.fn.getcwd()
+	local solution_root = helpers.find_solution_root(start_dir)
 
-	-- Check/build DLL
-	local dll = check_and_build_dll(project_path)
-	if not dll then
-		vim.notify("[dotnet-tools] Cannot start debugging without DLL", vim.log.levels.ERROR)
+	if not solution_root then
+		vim.notify("[dotnet-tools] Could not find solution root", vim.log.levels.ERROR)
 		callback(nil)
 		return
 	end
 
-	-- Read launch settings
-	local launch_settings = read_launch_settings(project_path)
-	if not launch_settings then
-		-- No launchSettings.json, return basic config
-		callback({
-			type = "coreclr",
-			name = "Launch .NET App",
-			request = "launch",
-			program = dll,
-			cwd = project_path,
-			env = {},
-			args = {},
-		})
+	-- Find all projects with launch settings
+	local projects = helpers.find_all_projects_with_launch_settings(solution_root)
+
+	if #projects == 0 then
+		vim.notify(
+			"[dotnet-tools] No projects with launchSettings.json found in solution. Create a launch profile first.",
+			vim.log.levels.ERROR
+		)
+		callback(nil)
 		return
 	end
 
-	-- Get profile data
-	local profile_data = get_launch_profile_data(project_path, launch_settings)
-	if not profile_data then
-		vim.notify("[dotnet-tools] No Project profiles found in launchSettings.json", vim.log.levels.WARN)
-		callback({
-			type = "coreclr",
-			name = "Launch .NET App",
-			request = "launch",
-			program = dll,
-			cwd = project_path,
-			env = {},
-			args = {},
-		})
-		return
-	end
+	-- Function to continue with profile selection for a given project
+	local function continue_with_project(selected_project)
+		local project_path = selected_project.project_dir
 
-	-- Always prompt user to select profile (async)
-	select_launch_profile(profile_data, function(selected_profile)
-		if not selected_profile then
-			vim.notify("[dotnet-tools] No profile selected, aborting debug session", vim.log.levels.WARN)
+		-- Check/build DLL for selected project
+		local dll = check_and_build_dll(project_path)
+		if not dll then
+			vim.notify("[dotnet-tools] Cannot start debugging without DLL", vim.log.levels.ERROR)
 			callback(nil)
 			return
 		end
 
-		-- Build final configuration
-		local env_vars = selected_profile.environmentVariables or {}
-
-		-- Add applicationUrl as ASPNETCORE_URLS if present
-		if selected_profile.applicationUrl then
-			env_vars.ASPNETCORE_URLS = selected_profile.applicationUrl
+		-- Read launch settings for selected project
+		local launch_settings = read_launch_settings(project_path)
+		if not launch_settings then
+			-- No launchSettings.json (shouldn't happen since we filtered), return basic config
+			callback({
+				type = "coreclr",
+				name = "Launch .NET App",
+				request = "launch",
+				program = dll,
+				cwd = project_path,
+				env = {},
+				args = {},
+			})
+			return
 		end
 
-		local args_str = selected_profile.commandLineArgs or ""
-		local args = args_str ~= "" and vim.split(args_str, " ") or {}
+		-- Get profile data
+		local profile_data = get_launch_profile_data(project_path, launch_settings)
+		if not profile_data then
+			vim.notify("[dotnet-tools] No Project profiles found in launchSettings.json", vim.log.levels.WARN)
+			callback({
+				type = "coreclr",
+				name = "Launch .NET App",
+				request = "launch",
+				program = dll,
+				cwd = project_path,
+				env = {},
+				args = {},
+			})
+			return
+		end
 
-		callback({
-			type = "coreclr",
-			name = "Launch .NET App",
-			request = "launch",
-			program = dll,
-			cwd = project_path,
-			env = env_vars,
-			args = args,
-		})
+		-- Prompt user to select profile (async)
+		select_launch_profile(profile_data, function(selected_profile)
+			if not selected_profile then
+				vim.notify("[dotnet-tools] No profile selected, aborting debug session", vim.log.levels.WARN)
+				callback(nil)
+				return
+			end
+
+			-- Build final configuration
+			local env_vars = selected_profile.environmentVariables or {}
+
+			-- Add applicationUrl as ASPNETCORE_URLS if present
+			if selected_profile.applicationUrl then
+				env_vars.ASPNETCORE_URLS = selected_profile.applicationUrl
+			end
+
+			local args_str = selected_profile.commandLineArgs or ""
+			local args = args_str ~= "" and vim.split(args_str, " ") or {}
+
+			callback({
+				type = "coreclr",
+				name = "Launch .NET App (" .. selected_project.name .. ")",
+				request = "launch",
+				program = dll,
+				cwd = project_path,
+				env = env_vars,
+				args = args,
+			})
+		end)
+	end
+
+	-- If only one project, skip project selection
+	if #projects == 1 then
+		continue_with_project(projects[1])
+		return
+	end
+
+	-- Multiple projects: prompt user to select startup project (async)
+	select_project(projects, function(selected_project)
+		if not selected_project then
+			vim.notify("[dotnet-tools] No project selected, aborting debug session", vim.log.levels.WARN)
+			callback(nil)
+			return
+		end
+
+		continue_with_project(selected_project)
 	end)
 end
 

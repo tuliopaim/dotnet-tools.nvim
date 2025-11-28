@@ -30,6 +30,88 @@ M.find_project_root_by_csproj = function(start_path)
 	end
 end
 
+-- Find the solution root by searching for .sln file, .git directory, or workspace root
+M.find_solution_root = function(start_path)
+	if not has_plenary then
+		vim.notify(
+			"[dotnet-tools] plenary.nvim is required for solution detection. Please install it.",
+			vim.log.levels.ERROR
+		)
+		return nil
+	end
+
+	local path = Path:new(start_path or vim.fn.getcwd())
+
+	-- First, search upward for .sln file
+	local search_path = path
+	while true do
+		local sln_files = vim.fn.glob(search_path:absolute() .. "/*.sln", false, true)
+		if #sln_files > 0 then
+			return search_path:absolute()
+		end
+
+		local parent = search_path:parent()
+		if parent:absolute() == search_path:absolute() then
+			break
+		end
+		search_path = parent
+	end
+
+	-- Second, search upward for .git directory
+	search_path = path
+	while true do
+		if vim.fn.isdirectory(search_path:absolute() .. "/.git") == 1 then
+			return search_path:absolute()
+		end
+
+		local parent = search_path:parent()
+		if parent:absolute() == search_path:absolute() then
+			break
+		end
+		search_path = parent
+	end
+
+	-- Fallback to workspace root or cwd
+	return vim.fn.getcwd()
+end
+
+-- Find all projects with launch settings starting from root_path
+M.find_all_projects_with_launch_settings = function(root_path)
+	local config = require("dotnet-tools.config")
+
+	-- Recursively search for all .csproj files
+	local csproj_files = vim.fn.globpath(root_path, "**/*.csproj", false, true)
+
+	local projects = {}
+
+	for _, csproj_path in ipairs(csproj_files) do
+		local project_dir = vim.fn.fnamemodify(csproj_path, ":h")
+		local launch_settings_path = project_dir .. "/" .. config.options.launch_settings_path
+
+		-- Check if launchSettings.json exists
+		if vim.fn.filereadable(launch_settings_path) == 1 then
+			-- Get project folder name for display
+			local project_folder = vim.fn.fnamemodify(project_dir, ":t")
+
+			-- Try to get AssemblyName from .csproj, fallback to folder name
+			local assembly_name = M.get_assembly_name_from_csproj(csproj_path)
+			local display_name = assembly_name or project_folder
+
+			-- Calculate relative path from root for better display
+			local relative_path = vim.fn.fnamemodify(project_dir, ":~:.")
+
+			table.insert(projects, {
+				name = display_name,
+				csproj_path = csproj_path,
+				project_dir = project_dir,
+				relative_path = relative_path,
+			})
+		end
+	end
+
+	return projects
+end
+
 -- Find the highest version of the netX.Y folder within a given path.
 M.get_highest_net_folder = function(bin_debug_path)
 	local dirs = vim.fn.glob(bin_debug_path .. "/net*", false, true)
@@ -73,12 +155,20 @@ M.get_assembly_name_from_csproj = function(csproj_path)
 end
 
 -- Build and return the full path to the .dll file for debugging.
-M.build_dll_path = function()
+-- @param project_path (optional) The path to the project directory. If not provided, will search from current file.
+M.build_dll_path = function(project_path)
 	local config = require("dotnet-tools.config")
-	local current_file = vim.api.nvim_buf_get_name(0)
-	local current_dir = vim.fn.fnamemodify(current_file, ":p:h")
+	local project_root
 
-	local project_root = M.find_project_root_by_csproj(current_dir)
+	-- If project_path is provided, use it; otherwise, find from current file
+	if project_path then
+		project_root = project_path
+	else
+		local current_file = vim.api.nvim_buf_get_name(0)
+		local current_dir = vim.fn.fnamemodify(current_file, ":p:h")
+		project_root = M.find_project_root_by_csproj(current_dir)
+	end
+
 	if not project_root then
 		vim.notify(
 			"[dotnet-tools] Could not find project root (no .csproj found). Are you in a .NET project?",
