@@ -75,6 +75,12 @@ require("dotnet-tools").setup({
   -- Test runner preference: "tmux", "split", or nil (auto-detect)
   test_runner_preference = nil,
 
+  -- When true (default), shows all launch profiles from all projects in a single flat list
+  -- Format: "ProjectName: ProfileName"
+  -- When false, prompts for project first, then profile (two-step selection)
+  -- Flat mode is recommended for faster workflow when working with multiple projects
+  flat_profiles = true,
+
   -- NuGet package management settings
   nuget = {
     -- Maximum number of search results to return
@@ -121,7 +127,12 @@ vim.keymap.set("n", "<leader>ds", "<cmd>DotnetSecrets<cr>", { desc = "Open user 
 1. Open a .NET project file (any .cs file in the project)
 2. Set breakpoints in nvim-dap (`:lua require('dap').toggle_breakpoint()`)
 3. Run `:DotnetDebug`
-4. Select a launch profile if `launchSettings.json` exists
+4. Select a launch profile:
+   - **Flat mode** (default, `flat_profiles = true`): Choose from all profiles across all projects in one step
+     - Format: "ProjectName: ProfileName"
+     - Faster workflow, especially useful for microservices/multi-project solutions
+   - **Two-step mode** (`flat_profiles = false`): First select project, then select profile
+     - Traditional approach with separate selections
 5. The plugin will:
    - Find the .csproj file
    - Build the project if needed

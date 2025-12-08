@@ -1,0 +1,374 @@
+*dotnet-tools.txt*    .NET development tools for Neovim
+
+==============================================================================
+CONTENTS                                              *dotnet-tools-contents*
+
+    1. Introduction ......................... |dotnet-tools-intro|
+    2. Requirements ......................... |dotnet-tools-requirements|
+    3. Installation ......................... |dotnet-tools-installation|
+    4. Quick Start .......................... |dotnet-tools-quickstart|
+    5. Commands ............................. |dotnet-tools-commands|
+    6. API Functions ........................ |dotnet-tools-api|
+    7. Configuration ........................ |dotnet-tools-config|
+    8. Features ............................. |dotnet-tools-features|
+    9. Troubleshooting ...................... |dotnet-tools-troubleshooting|
+   10. About ................................ |dotnet-tools-about|
+
+==============================================================================
+1. INTRODUCTION                                          *dotnet-tools-intro*
+
+dotnet-tools.nvim is a Neovim plugin that provides essential .NET
+development tools including debugging, test running, NuGet package
+management, user secrets, and IDE integration.
+
+Features:~
+  • Debug with launch profiles from launchSettings.json
+  • Run individual tests or entire test classes
+  • Search, install, update, and remove NuGet packages
+  • Manage user secrets (secrets.json)
+  • Open files in JetBrains Rider
+
+==============================================================================
+2. REQUIREMENTS                                   *dotnet-tools-requirements*
+
+Required:~
+  • Neovim >= 0.8.0
+  • .NET SDK 6.0 or later
+
+Optional Dependencies:~
+  • nvim-dap - Required for debugging (`:DotnetDebug`)
+  • nvim-treesitter with C# parser - Required for test detection
+  • plenary.nvim - Required for project detection
+  • tmux - Optional for tmux test runner (falls back to splits)
+  • jq - Recommended for JSON sanitization in launch settings
+
+Note: The plugin loads successfully even if optional dependencies are
+missing. Errors only appear when using features that require unavailable
+dependencies.
+
+==============================================================================
+3. INSTALLATION                                   *dotnet-tools-installation*
+
+Using lazy.nvim:~
+>lua
+    {
+      "tuliopaim/dotnet-tools.nvim",
+      dependencies = {
+        "nvim-lua/plenary.nvim",
+        "mfussenegger/nvim-dap",
+        "nvim-treesitter/nvim-treesitter",
+      },
+      config = function()
+        require("dotnet-tools").setup()
+      end,
+    }
+<
+
+Using packer.nvim:~
+>lua
+    use {
+      "tuliopaim/dotnet-tools.nvim",
+      requires = {
+        "nvim-lua/plenary.nvim",
+        "mfussenegger/nvim-dap",
+        "nvim-treesitter/nvim-treesitter",
+      },
+      config = function()
+        require("dotnet-tools").setup()
+      end,
+    }
+<
+
+Manual:~
+Clone the repository into your Neovim package path and add to your config:
+>lua
+    require("dotnet-tools").setup()
+<
+
+==============================================================================
+4. QUICK START                                     *dotnet-tools-quickstart*
+
+Basic setup with default configuration:~
+>lua
+    require("dotnet-tools").setup()
+<
+
+With custom configuration:~
+>lua
+    require("dotnet-tools").setup({
+      rider_path = "/Applications/Rider.app/Contents/MacOS/rider",
+      auto_build = true,
+      flat_profiles = true,
+      test_runner_preference = nil,  -- auto-detect
+      nuget = {
+        search_limit = 20,
+        include_prerelease = false,
+      },
+    })
+<
+
+Common workflows:~
+
+  1. Debug your application:
+     `:DotnetDebug` - Select a launch profile and start debugging
+
+  2. Run tests:
+     `:DotnetTest` - Run test method at cursor
+     `:DotnetTestClass` - Run all tests in current class
+
+  3. Manage packages:
+     `:DotnetNugetAdd` - Search and install a package
+     `:DotnetNugetList` - List and update installed packages
+
+  4. Manage secrets:
+     `:UserSecrets` - Open or create secrets.json
+
+==============================================================================
+5. COMMANDS                                           *dotnet-tools-commands*
+
+                                                              *:DotnetDebug*
+:DotnetDebug            Start debugging with launch profile selection.
+                        Reads profiles from Properties/launchSettings.json
+                        and starts nvim-dap with selected profile's
+                        environment variables and arguments.
+
+                                                               *:DotnetTest*
+:DotnetTest             Run the test method at cursor position.
+                        Uses treesitter to detect test method name and
+                        runs it with `dotnet test --filter`.
+
+                                                          *:DotnetTestClass*
+:DotnetTestClass        Run all tests in the current class.
+                        Uses treesitter to detect class name and runs
+                        all tests in that class.
+
+                                                          *:DotnetNugetAdd*
+:DotnetNugetAdd         Search for a NuGet package and install it.
+                        Interactive workflow: enter search term, select
+                        package, select version, confirm installation.
+
+                                                         *:DotnetNugetList*
+:DotnetNugetList        List installed packages and update versions.
+                        Shows currently installed packages, allows you
+                        to select one and choose a different version.
+
+                                                       *:DotnetNugetRemove*
+:DotnetNugetRemove      Remove a NuGet package from the project.
+                        Lists installed packages and removes the
+                        selected one.
+
+                                                              *:UserSecrets*
+:UserSecrets            Open or create user secrets file (secrets.json).
+                        Automatically initializes UserSecretsId if needed
+                        and opens the secrets file for editing.
+
+                                                             *:OpenInRider*
+:OpenInRider            Open current file in JetBrains Rider.
+                        Opens the file at the current cursor line.
+
+==============================================================================
+6. API FUNCTIONS                                          *dotnet-tools-api*
+
+You can call plugin functions programmatically:
+>lua
+    local dotnet_tools = require("dotnet-tools")
+
+    -- Start debugging
+    dotnet_tools.start_debugging()
+
+    -- Run test at cursor
+    dotnet_tools.run_test_at_cursor()
+
+    -- Run test class
+    dotnet_tools.run_test_class()
+
+    -- Manage user secrets
+    dotnet_tools.open_or_create_secrets_file()
+
+    -- Open in Rider
+    dotnet_tools.open_in_rider()
+
+    -- NuGet package management
+    dotnet_tools.nuget_search_and_install()
+    dotnet_tools.nuget_list_packages()
+    dotnet_tools.nuget_remove_package()
+<
+
+==============================================================================
+7. CONFIGURATION                                       *dotnet-tools-config*
+
+Default configuration:~
+>lua
+    {
+      -- Path to Rider executable
+      rider_path = "/Applications/Rider.app/Contents/MacOS/rider",
+
+      -- Auto-build if DLL is missing or outdated
+      auto_build = true,
+
+      -- Path to launchSettings.json relative to project root
+      launch_settings_path = "Properties/launchSettings.json",
+
+      -- Paths to search for compiled DLLs
+      dll_search_paths = { "bin/Debug", "bin/Release" },
+
+      -- Test runner: "tmux", "split", or nil (auto-detect)
+      test_runner_preference = nil,
+
+      -- Profile selection mode (see below)
+      flat_profiles = true,
+
+      -- NuGet package management settings
+      nuget = {
+        search_limit = 20,
+        include_prerelease = false,
+      },
+    }
+<
+
+                                                    *dotnet-tools-rider-path*
+rider_path~
+  Platform-specific paths for JetBrains Rider:
+  • macOS: `/Applications/Rider.app/Contents/MacOS/rider`
+  • Linux: `rider` (if in PATH) or `/opt/rider/bin/rider`
+  • Windows: `C:\Program Files\JetBrains\Rider\bin\rider64.exe`
+
+                                                 *dotnet-tools-flat-profiles*
+flat_profiles~
+  Controls how launch profiles are presented:
+  • `true` (default): All profiles from all projects in one list
+    Format: "ProjectName: ProfileName"
+    Fastest workflow for multi-project solutions
+  • `false`: Two-step selection - first project, then profile
+
+                                          *dotnet-tools-test-runner-preference*
+test_runner_preference~
+  • `nil` (default): Auto-detect tmux, fallback to split
+  • `"tmux"`: Always use tmux
+  • `"split"`: Always use Neovim split window
+
+==============================================================================
+8. FEATURES                                           *dotnet-tools-features*
+
+DEBUGGING                                        *dotnet-tools-feature-debug*
+
+The debug feature integrates with nvim-dap to provide launch profile
+support for .NET applications.
+
+Workflow:~
+  1. Run `:DotnetDebug`
+  2. Select a launch profile from launchSettings.json
+  3. Debugging session starts with profile's environment and arguments
+
+Features:~
+  • Automatic DLL detection and path resolution
+  • Optional auto-build if DLL is missing or outdated
+  • Environment variable and argument passing
+  • Multi-project solution support
+  • Flat or two-step profile selection
+  • ASPNETCORE_URLS support for web apps
+
+DLL Resolution:~
+  The plugin searches for compiled DLLs by:
+  1. Finding project root via .csproj file
+  2. Extracting <AssemblyName> from .csproj
+  3. Finding highest netX.Y folder in configured paths
+  4. Constructing path: {net_folder}/{assembly_name}.dll
+
+TEST RUNNER                                       *dotnet-tools-feature-test*
+
+Run .NET tests directly from Neovim with automatic test detection.
+
+Commands:~
+  • `:DotnetTest` - Run test at cursor
+  • `:DotnetTestClass` - Run all tests in class
+
+Test Detection:~
+  Uses treesitter to parse C# code and extract method/class names.
+  Runs: `dotnet test --filter FullyQualifiedName~ClassName.MethodName`
+
+Output:~
+  • Tmux: Opens new pane with test output
+  • Split: Opens Neovim split with test output
+
+NUGET MANAGEMENT                                 *dotnet-tools-feature-nuget*
+
+Interactive NuGet package management without leaving Neovim.
+
+Available operations:~
+  • Search and install packages
+  • List and update installed packages
+  • Remove packages
+
+Features:~
+  • Version selection for all operations
+  • Central Package Management (Directory.Packages.props) support
+  • Optional prerelease version support
+  • Configurable search result limit
+
+USER SECRETS                                   *dotnet-tools-feature-secrets*
+
+Quick access to .NET user secrets for local configuration.
+
+`:UserSecrets` will:~
+  • Initialize UserSecretsId in .csproj if needed
+  • Create secrets.json if it doesn't exist
+  • Open secrets file at:
+    $HOME/.microsoft/usersecrets/{UserSecretsId}/secrets.json
+
+RIDER INTEGRATION                                *dotnet-tools-feature-rider*
+
+Open the current file in JetBrains Rider at the exact cursor position.
+
+`:OpenInRider` opens:~
+  • Current file path
+  • At current line number
+  • In Rider IDE (asynchronous, non-blocking)
+
+==============================================================================
+9. TROUBLESHOOTING                             *dotnet-tools-troubleshooting*
+
+"C# tree-sitter parser not found"~
+  Install the C# parser:
+  `:TSInstall c_sharp`
+
+"No .csproj found"~
+  Make sure you're in a .NET project directory or have a .NET project
+  file open. The plugin searches upward from the current file to find
+  the nearest .csproj file.
+
+Debugging doesn't work~
+  1. Ensure nvim-dap is installed and configured
+  2. Check that the project builds successfully (`dotnet build`)
+  3. Verify DLL path exists in `bin/Debug/netX.Y/`
+  4. Set `auto_build = true` in config for automatic building
+
+Tests not detected~
+  1. Ensure nvim-treesitter is installed
+  2. Install C# parser: `:TSInstall c_sharp`
+  3. Verify cursor is inside a test method
+  4. Test methods should follow standard naming conventions
+
+Launch profiles not found~
+  1. Check that `Properties/launchSettings.json` exists
+  2. Ensure profiles have `"commandName": "Project"`
+  3. Install `jq` for better JSON parsing (recommended)
+
+Rider doesn't open~
+  1. Verify `rider_path` in configuration is correct
+  2. Test Rider path from terminal manually
+  3. Check platform-specific paths: |dotnet-tools-rider-path|
+
+==============================================================================
+10. ABOUT                                                *dotnet-tools-about*
+
+License: MIT
+
+Repository: https://github.com/tuliopaim/dotnet-tools.nvim
+
+Issues: https://github.com/tuliopaim/dotnet-tools.nvim/issues
+
+Contributing: Pull requests and bug reports are welcome!
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:
