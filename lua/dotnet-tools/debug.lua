@@ -79,6 +79,27 @@ local function get_launch_profile_data(project_path, launch_settings)
 	}
 end
 
+-- Collect all profiles from all projects into a flat list
+local function collect_all_flat_profiles(projects)
+	local flat_profiles = {}
+	for _, project in ipairs(projects) do
+		local launch_settings = read_launch_settings(project.project_dir)
+		if launch_settings then
+			local profile_data = get_launch_profile_data(project.project_dir, launch_settings)
+			if profile_data then
+				for _, profile_name in ipairs(profile_data.names) do
+					table.insert(flat_profiles, {
+						display_name = project.name .. ": " .. profile_name,
+						project = project,
+						profile = profile_data.map[profile_name],
+					})
+				end
+			end
+		end
+	end
+	return flat_profiles
+end
+
 -- Check if DLL exists and optionally prompt to build
 local function check_and_build_dll(project_path)
 	local config = require("dotnet-tools.config")
@@ -166,6 +187,44 @@ local function select_launch_profile(profile_data, callback)
 	end)
 end
 
+-- Prompt user to select from flat profile list (async with callback)
+local function select_flat_profile(flat_profiles, callback)
+	local display_names = {}
+	for _, entry in ipairs(flat_profiles) do
+		table.insert(display_names, entry.display_name)
+	end
+
+	vim.ui.select(display_names, {
+		prompt = "Select launch profile:",
+	}, function(choice, idx)
+		if choice and idx then
+			callback(flat_profiles[idx])
+		else
+			callback(nil)
+		end
+	end)
+end
+
+-- Build final DAP configuration from project and profile
+local function build_dap_config(project, profile, dll)
+	local env_vars = profile.environmentVariables or {}
+	if profile.applicationUrl then
+		env_vars.ASPNETCORE_URLS = profile.applicationUrl
+	end
+	local args_str = profile.commandLineArgs or ""
+	local args = args_str ~= "" and vim.split(args_str, " ") or {}
+
+	return {
+		type = "coreclr",
+		name = "Launch .NET App (" .. project.name .. ")",
+		request = "launch",
+		program = dll,
+		cwd = project.project_dir,
+		env = env_vars,
+		args = args,
+	}
+end
+
 local function configure_debug_session(callback)
 	-- Find solution root (searches for .sln, .git, or uses cwd)
 	local current_file = vim.fn.expand("%:p")
@@ -187,6 +246,36 @@ local function configure_debug_session(callback)
 			vim.log.levels.ERROR
 		)
 		callback(nil)
+		return
+	end
+
+	-- Check if flat profiles mode is enabled
+	local config = require("dotnet-tools.config")
+	if config.options.flat_profiles then
+		local flat_profiles = collect_all_flat_profiles(projects)
+
+		if #flat_profiles == 0 then
+			vim.notify("[dotnet-tools] No launch profiles found in any project.", vim.log.levels.ERROR)
+			callback(nil)
+			return
+		end
+
+		select_flat_profile(flat_profiles, function(selected)
+			if not selected then
+				vim.notify("[dotnet-tools] No profile selected, aborting debug session", vim.log.levels.WARN)
+				callback(nil)
+				return
+			end
+
+			local dll = check_and_build_dll(selected.project.project_dir)
+			if not dll then
+				vim.notify("[dotnet-tools] Cannot start debugging without DLL", vim.log.levels.ERROR)
+				callback(nil)
+				return
+			end
+
+			callback(build_dap_config(selected.project, selected.profile, dll))
+		end)
 		return
 	end
 
@@ -242,26 +331,7 @@ local function configure_debug_session(callback)
 				return
 			end
 
-			-- Build final configuration
-			local env_vars = selected_profile.environmentVariables or {}
-
-			-- Add applicationUrl as ASPNETCORE_URLS if present
-			if selected_profile.applicationUrl then
-				env_vars.ASPNETCORE_URLS = selected_profile.applicationUrl
-			end
-
-			local args_str = selected_profile.commandLineArgs or ""
-			local args = args_str ~= "" and vim.split(args_str, " ") or {}
-
-			callback({
-				type = "coreclr",
-				name = "Launch .NET App (" .. selected_project.name .. ")",
-				request = "launch",
-				program = dll,
-				cwd = project_path,
-				env = env_vars,
-				args = args,
-			})
+			callback(build_dap_config(selected_project, selected_profile, dll))
 		end)
 	end
 

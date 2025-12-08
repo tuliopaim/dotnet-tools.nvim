@@ -16,6 +16,11 @@ M.defaults = {
 	-- Test runner preference: "tmux" or "split"
 	test_runner_preference = nil, -- nil = auto-detect
 
+	-- When true, shows all launch profiles from all projects in a single flat list
+	-- Format: "ProjectName: ProfileName"
+	-- When false, prompts for project first, then profile (two-step selection)
+	flat_profiles = true,
+
 	-- NuGet package management settings
 	nuget = {
 		-- Maximum number of search results to return
